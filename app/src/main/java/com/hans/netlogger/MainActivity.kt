@@ -100,16 +100,4 @@ class MainActivity : Activity() {
         val tFirst = System.nanoTime()
         var bytes = if (first >= 0) 1L else 0L
         val buf = ByteArray(8192)
-        while (true) { val n = s.read(buf); if (n < 0) break; bytes += n }
-        val t1 = System.nanoTime()
-        s.close(); c.disconnect()
-        Pair(bytes * 8 / 1e6 / ((t1 - t0) / 1e9), (tFirst - t0) / 1_000_000)
-    } catch (e: Exception) { Pair(0.0, -1L) }
-
-    private fun sample() {
-        val name = spot.text.toString().trim().ifEmpty { "unnamed" }.replace(",", " ")
-        val (dbm, type) = readSignal()
-        status.text = "Testing..."
-        io.execute {
-            val (mbps, ms) = speedTest()
-            file.appendText("${System.currentTimeMil
+        while (true) { val n = s.read(buf); if (n
