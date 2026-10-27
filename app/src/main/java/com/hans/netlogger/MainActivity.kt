@@ -92,9 +92,9 @@ class MainActivity : Activity() {
     // Returns (Mbps, latency ms). (0.0, -1) means the test failed, i.e. an outage.
     private fun speedTest(): Pair<Double, Long> = try {
         val t0 = System.nanoTime()
-        val c = URL("https://speed.cloudflare.com/__down?bytes=500000").openConnection() as HttpURLConnection
+        val c = URL("https://speed.cloudflare.com/__down?bytes=100000").openConnection() as HttpURLConnection
         c.connectTimeout = 10_000
-        c.readTimeout = 15_000
+        c.readTimeout = 30_000
         val s = c.inputStream
         val first = s.read()
         val tFirst = System.nanoTime()
@@ -112,31 +112,4 @@ class MainActivity : Activity() {
         status.text = "Testing..."
         io.execute {
             val (mbps, ms) = speedTest()
-            file.appendText("${System.currentTimeMillis()},$name,$dbm,$type,${String.format(Locale.US, "%.2f", mbps)},$ms\n")
-            ui.post {
-                status.text = if (ms < 0) "No connection ($dbm dBm, $type)"
-                else String.format(Locale.US, "%d dBm · %s · %.2f Mbps · %d ms", dbm, type, mbps, ms)
-                showReport()
-            }
-        }
-    }
-
-    private fun showReport() {
-        val rows = if (file.exists()) file.readLines().mapNotNull { l ->
-            val p = l.split(",")
-            if (p.size < 6) null else Row(p[0].toLong(), p[1], p[2].toInt(), p[3], p[4].toDouble())
-        } else emptyList()
-        if (rows.isEmpty()) { report.text = "\nNo data yet. Start logging and keep the app open."; return }
-        fun f(x: Double) = String.format(Locale.US, "%.2f", x)
-        val hours = rows.groupBy { Calendar.getInstance().apply { timeInMillis = it.t }.get(Calendar.HOUR_OF_DAY) }
-            .mapValues { e -> e.value.map { it.mbps }.average() }.toList().sortedByDescending { it.second }
-        val spots = rows.groupBy { it.spot }
-            .mapValues { e -> e.value.map { it.mbps }.average() }.toList().sortedByDescending { it.second }
-        fun line(h: Pair<Int, Double>) = String.format(Locale.US, "%02d:00  %s Mbps", h.first, f(h.second))
-        var t = "\nSamples: ${rows.size}   Failed: ${rows.count { it.mbps == 0.0 }}\n\nBest hours:\n" +
-            hours.take(3).joinToString("\n") { line(it) }
-        if (hours.size > 3) t += "\n\nWeakest hours:\n" + hours.takeLast(3).reversed().joinToString("\n") { line(it) }
-        t += "\n\nSpots (best first):\n" + spots.joinToString("\n") { "${it.first}: ${f(it.second)} Mbps" }
-        report.text = t
-    }
-}
+            file.appendText("${System.currentTimeMil
