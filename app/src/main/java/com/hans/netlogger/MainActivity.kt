@@ -87,9 +87,7 @@ class MainActivity : Activity() {
             }
         } catch (e: SecurityException) { }
         return dbm to type
-    }
-
-    // Returns (Mbps, latency ms). (0.0, -1) means the test failed, i.e. an outage.
+    }    // Returns (Mbps, latency ms). (0.0, -1) means the test failed, i.e. an outage.
     private fun speedTest(): Pair<Double, Long> = try {
         val t0 = System.nanoTime()
         val c = URL("https://speed.cloudflare.com/__down?bytes=100000").openConnection() as HttpURLConnection
@@ -100,4 +98,43 @@ class MainActivity : Activity() {
         val tFirst = System.nanoTime()
         var bytes = if (first >= 0) 1L else 0L
         val buf = ByteArray(8192)
-        while (true) { val n = s.read(buf); if (n
+        while (true) { val n = s.read(buf); if (n < 0) break; bytes += n }
+        val t1 = System.nanoTime()
+        s.close(); c.disconnect()
+        Pair(bytes * 8 / 1e6 / ((t1 - t0) / 1e9), (tFirst - t0) / 1_000_000)
+    } catch (e: Exception) { Pair(0.0, -1L) }
+
+    private fun sample() {
+        val name = spot.text.toString().trim().ifEmpty { "unnamed" }.replace(",", " ")
+        val (dbm, type) = readSignal()
+        status.text = "Testing..."
+        io.execute {
+            val (mbps, ms) = speedTest()
+            file.appendText("${System.currentTimeMillis()},$name,$dbm,$type,${String.format(Locale.US, "%.2f", mbps)},$ms\n")
+            ui.post {
+                status.text = if (ms < 0) "No connection ($dbm dBm, $type)"
+                else String.format(Locale.US, "%d dBm · %s · %.2f Mbps · %d ms", dbm, type, mbps, ms)
+                showReport()
+            }
+        }
+    }
+
+    private fun showReport() {
+        val rows = if (file.exists()) file.readLines().mapNotNull { l ->
+            val p = l.split(",")
+            if (p.size < 6) null else Row(p[0].toLong(), p[1], p[2].toInt(), p[3], p[4].toDouble())
+        } else emptyList()
+        if (rows.isEmpty()) { report.text = "\nNo data yet. Start logging and keep the app open."; return }
+        fun f(x: Double) = String.format(Locale.US, "%.2f", x)
+        val hours = rows.groupBy { Calendar.getInstance().apply { timeInMillis = it.t }.get(Calendar.HOUR_OF_DAY) }
+            .mapValues { e -> e.value.map { it.mbps }.average() }.toList().sortedByDescending { it.second }
+        val spots = rows.groupBy { it.spot }
+            .mapValues { e -> e.value.map { it.mbps }.average() }.toList().sortedByDescending { it.second }
+        fun line(h: Pair<Int, Double>) = String.format(Locale.US, "%02d:00  %s Mbps", h.first, f(h.second))
+        var t = "\nSamples: ${rows.size}   Failed: ${rows.count { it.mbps == 0.0 }}\n\nBest hours:\n" +
+            hours.take(3).joinToString("\n") { line(it) }
+        if (hours.size > 3) t += "\n\nWeakest hours:\n" + hours.takeLast(3).reversed().joinToString("\n") { line(it) }
+        t += "\n\nSpots (best first):\n" + spots.joinToString("\n") { "${it.first}: ${f(it.second)} Mbps" }
+        report.text = t
+    }
+}
